@@ -1,0 +1,109 @@
+# Quantum RSI Executor — Integrated Signal Engine
+import numpy as np
+import matplotlib.pyplot as plt
+
+class QuantumRSIExecutor:
+    def __init__(self, window=14, account_balance=10000, risk_per_trade=0.01):
+        self.window = window
+        self.account_balance = account_balance
+        self.risk_per_trade = risk_per_trade
+
+    def compute_rsi(self, prices):
+        prices = np.asarray(prices, dtype=float)
+        deltas = np.diff(prices)
+        seed = deltas[:self.window]
+        up = np.mean(seed[seed > 0]) if np.any(seed > 0) else 0.0
+        down = -np.mean(seed[seed < 0]) if np.any(seed < 0) else 0.0
+        rs = up / down if down != 0 else np.inf
+        rsi = np.full_like(prices, np.nan)
+        rsi[self.window] = 100. - 100. / (1. + rs)
+
+        for i in range(self.window + 1, len(prices)):
+            delta = deltas[i - 1]
+            gain = max(delta, 0)
+            loss = -min(delta, 0)
+
+            up = (up * (self.window - 1) + gain) / self.window
+            down = (down * (self.window - 1) + loss) / self.window
+
+            rs = up / down if down != 0 else np.inf
+            rsi[i] = 100. - 100. / (1. + rs)
+
+        return rsi
+
+    def apply_quantum_correction(self, rsi, bitstring):
+        if not (set(bitstring) <= {'0', '1'}):
+            raise ValueError("Bitstring must contain only 0s and 1s.")
+        modifier = int(bitstring, 2) / (2 ** len(bitstring) - 1)
+        corrected_rsi = np.clip(rsi * modifier, 0, 100)
+        return corrected_rsi
+
+    def compute_quantum_risk(self, prices, alpha=0.05):
+        returns = np.diff(prices) / prices[:-1]
+        if len(returns) < 2:
+            return 0.0
+        simulated_returns = np.random.normal(np.mean(returns), np.std(returns), 10000)
+        var_index = int(alpha * len(simulated_returns))
+        cvar = np.mean(np.sort(simulated_returns)[:var_index])
+        return abs(cvar)
+
+    def compute_position_size(self, prices):
+        atr = np.mean(np.abs(np.diff(prices))) if len(prices) > 1 else 0.0
+        dollar_risk = self.account_balance * self.risk_per_trade
+        position_size = dollar_risk / atr if atr != 0 else 0.0
+        return round(position_size, 2)
+
+    def generate_signal(self, rsi, quantum_rsi):
+        if np.isnan(quantum_rsi):
+            return "WAIT"
+        if quantum_rsi > 70 and rsi > 70:
+            return "SELL"
+        elif quantum_rsi < 30 and rsi < 30:
+            return "BUY"
+        else:
+            return "HOLD"
+
+    def analyze(self, prices, bitstring="110101"):
+        rsi = self.compute_rsi(prices)
+        quantum_rsi = self.apply_quantum_correction(rsi, bitstring)
+        risk = self.compute_quantum_risk(prices)
+        size = self.compute_position_size(prices)
+        signal = self.generate_signal(rsi[-1], quantum_rsi[-1])
+
+        self.plot_results(prices, rsi, quantum_rsi, signal)
+
+        print("Quantum Risk (CVaR):", round(risk, 5))
+        print("Recommended Position Size:", size)
+        print("Signal:", signal)
+
+        return {
+            "rsi": rsi,
+            "corrected_rsi": quantum_rsi,
+            "quantum_risk": risk,
+            "position_size": size,
+            "signal": signal
+        }
+
+    def plot_results(self, prices, rsi, quantum_rsi, signal):
+        plt.figure(figsize=(12, 6))
+        plt.subplot(2, 1, 1)
+        plt.plot(prices, label='Price')
+        plt.title(f'Price Series | Signal: {signal}')
+        plt.legend()
+
+        plt.subplot(2, 1, 2)
+        plt.plot(rsi, label='Raw RSI')
+        plt.plot(quantum_rsi, label='Quantum RSI', linestyle='--')
+        plt.axhline(70, color='r', linestyle=':')
+        plt.axhline(30, color='g', linestyle=':')
+        plt.title('RSI vs Quantum RSI')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+# Example usage:
+if __name__ == "__main__":
+    np.random.seed(42)
+    prices = np.cumsum(np.random.normal(loc=0.5, scale=1.0, size=100)) + 100
+    executor = QuantumRSIExecutor()
+    results = executor.analyze(prices, bitstring="110101")
